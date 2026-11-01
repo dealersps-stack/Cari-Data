@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a73e8">
+<title>Cari Lead</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  body{font-family:Arial,sans-serif;margin:0;background:#f3f4f6}
+  .box{background:#fff;padding:14px}
+  input{width:100%;box-sizing:border-box;padding:12px;margin:6px 0;font-size:16px;border:1px solid #ccc;border-radius:8px}
+  button{padding:12px;font-size:16px;border:0;border-radius:8px;background:#1a73e8;color:#fff;width:100%}
+  button:disabled{opacity:.6}
+  #peta{height:260px}
+  .kartu{background:#fff;margin:10px 12px;padding:12px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .aksi a{display:inline-block;margin:8px 6px 0 0;padding:8px 12px;border-radius:8px;color:#fff;text-decoration:none;font-size:14px}
+  .wa{background:#25d366}.tel{background:#555}.mp{background:#ea4335}.rt{background:#1a73e8}
+  small{color:#555}
+  .ubah{float:right;font-size:13px;color:#1a73e8}
+</style>
+</head>
+<body>
+
+<div id="setup" class="box" hidden>
+  <b>Pengaturan awal</b><br>
+  <small>Cukup diisi sekali. Disimpan di HP ini saja.</small>
+  <input id="api" placeholder="Link Apps Script (berakhiran /exec)" autocomplete="off">
+  <input id="kode" type="password" placeholder="Kode akses" autocomplete="off">
+  <button onclick="simpanPengaturan()">Simpan</button>
+  <small id="infoSetup"></small>
+</div>
+
+<div id="app" hidden>
+  <div class="box">
+    <a href="#" class="ubah" onclick="ubah();return false">Pengaturan</a>
+    <b>Cari Lead</b>
+    <input id="usaha" placeholder="Usaha (contoh: pengrajin tempe)">
+    <input id="lokasi" placeholder="Lokasi (kosong = seluruh DIY)">
+    <button id="btn" onclick="cari()">Cari</button>
+    <small id="info"></small>
+  </div>
+  <div id="peta"></div>
+  <div id="daftar"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+var peta, lapisan, API = '', TOKEN = '';
+
+function $(x){ return document.getElementById(x); }
+function baca(k){ try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+function simpan(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+
+function esc(s){
+  return String(s || '').replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function aman(u){ return /^https:\/\//.test(u) ? esc(u) : '#'; }
+
+function panggil(p){
+  p.token = TOKEN;
+  var q = Object.keys(p).map(function(k){ return k + '=' + encodeURIComponent(p[k]); }).join('&');
+  return fetch(API + '?' + q).then(function(r){ return r.json(); });
+}
+
+function mulai(){
+  API = baca('api'); TOKEN = baca('kode');
+  if (!API || !TOKEN) { $('setup').hidden = false; $('app').hidden = true; return; }
+  $('setup').hidden = true; $('app').hidden = false;
+  if (typeof L === 'undefined') { $('info').textContent = 'Peta butuh internet. Sambungkan lalu buka ulang.'; return; }
+  if (!peta) {
+    peta = L.map('peta').setView([-7.78, 110.37], 10);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(peta);
+    lapisan = L.layerGroup().addTo(peta);
+  }
+  $('info').textContent = 'Memuat...';
+  panggil({aksi: 'ambil'}).then(hasil).catch(gagal);
+}
+
+function ubah(){
+  $('api').value = API; $('kode').value = TOKEN;
+  $('setup').hidden = false; $('app').hidden = true;
+}
+
+function simpanPengaturan(){
+  var a = $('api').value.trim(), k = $('kode').value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(a)) {
+    $('infoSetup').textContent = 'Link harus diawali https://script.google.com/macros/s/ dan berakhiran /exec';
+    return;
+  }
+  if (!k) { $('infoSetup').textContent = 'Isi kode akses dulu.'; return; }
+  simpan('api', a); simpan('kode', k);
+  mulai();
+}
+
+function hasil(r){
+  $('btn').disabled = false;
+  if (r.error) { $('info').textContent = r.error; return; }
+  tampil(r.leads || []);
+}
+
+function gagal(e){
+  $('btn').disabled = false;
+  $('info').textContent = 'Gagal terhubung. Cek internet, link /exec, dan akses penerapan "Siapa saja".';
+}
+
+function cari(){
+  var u = $('usaha').value, l = $('lokasi').value;
+  $('btn').disabled = true;
+  $('info').textContent = 'Mencari, mohon tunggu...';
+  panggil({aksi: 'cari', usaha: u, lokasi: l}).then(hasil).catch(gagal);
+}
+
+function tampil(leads){
+  lapisan.clearLayers();
+  var d = $('daftar');
+  d.innerHTML = '';
+  var titik = [];
+  leads.forEach(function(x){
+    if (x.lat && x.lng) {
+      L.marker([x.lat, x.lng]).addTo(lapisan)
+        .bindPopup('<b>' + esc(x.nama) + '</b><br><a href="' + aman(x.rute) + '" target="_blank" rel="noopener">Rute</a>');
+      titik.push([x.lat, x.lng]);
+    }
+    var k = document.createElement('div');
+    k.className = 'kartu';
+    k.innerHTML = '<b>' + esc(x.nama) + '</b><br><small>' + esc(x.kategori) + ' • ' + esc(x.alamat) + '</small>' +
+      '<div class="aksi">' +
+      '<a class="wa" href="' + aman(x.wa) + '" target="_blank" rel="noopener">WA</a>' +
+      '<a class="tel" href="tel:+' + esc(x.hp) + '">Telepon</a>' +
+      '<a class="mp" href="' + aman(x.maps) + '" target="_blank" rel="noopener">Maps</a>' +
+      '<a class="rt" href="' + aman(x.rute) + '" target="_blank" rel="noopener">Rute</a>' +
+      '</div>';
+    d.appendChild(k);
+  });
+  if (titik.length) peta.fitBounds(titik, {padding: [20, 20]});
+  setTimeout(function(){ peta.invalidateSize(); }, 300);
+  $('info').textContent = leads.length + ' lead';
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+window.onload = mulai;
+</script>
+</body>
+</html>
