@@ -26,17 +26,17 @@
 <body>
 
 <div id="setup" class="box" hidden>
-  <b>Pengaturan awal</b><br>
-  <small>Cukup diisi sekali. Disimpan di HP ini saja.</small>
+  <b>Masuk pemilik</b><br>
+  <small>Khusus pemilik data. Pemakai umum tidak perlu mengisi ini.</small>
   <input id="api" placeholder="Link Apps Script (berakhiran /exec)" autocomplete="off">
-  <input id="kode" type="password" placeholder="Kode akses" autocomplete="off">
+  <input id="kode" type="password" placeholder="Kode akses (kosongkan untuk mode umum)" autocomplete="off">
   <button onclick="simpanPengaturan()">Simpan</button>
   <small id="infoSetup"></small>
 </div>
 
 <div id="app" hidden>
   <div class="box">
-    <a href="#" class="ubah" onclick="ubah();return false">Pengaturan</a>
+    <a href="#" class="ubah" onclick="ubah();return false">Pemilik</a>
     <b>Cari Lead</b>
     <input id="usaha" placeholder="Usaha (contoh: pengrajin tempe)">
     <input id="lokasi" placeholder="Lokasi (kosong = seluruh DIY)">
@@ -49,7 +49,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-var peta, lapisan, API = '', TOKEN = '';
+var API_BAWAAN = 'https://script.google.com/macros/s/AKfycbwDqbDVQwBTfXKXjRQN5z8a9UsdQB4EsriMey86kDA_nbf01b1MBHbyAKfhRy7r6BKMOg/exec';
+var peta, lapisan, API = '', TOKEN = '', CID = '';
 
 function $(x){ return document.getElementById(x); }
 function baca(k){ try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
@@ -63,14 +64,13 @@ function esc(s){
 function aman(u){ return /^https:\/\//.test(u) ? esc(u) : '#'; }
 
 function panggil(p){
-  p.token = TOKEN;
   var q = Object.keys(p).map(function(k){ return k + '=' + encodeURIComponent(p[k]); }).join('&');
   return fetch(API + '?' + q).then(function(r){ return r.json(); });
 }
 
 function mulai(){
-  API = baca('api'); TOKEN = baca('kode');
-  if (!API || !TOKEN) { $('setup').hidden = false; $('app').hidden = true; return; }
+  API = baca('api') || API_BAWAAN; TOKEN = baca('kode'); CID = baca('cid');
+  if (!CID) { CID = Math.random().toString(36).slice(2) + Date.now().toString(36); simpan('cid', CID); }
   $('setup').hidden = true; $('app').hidden = false;
   if (typeof L === 'undefined') { $('info').textContent = 'Peta butuh internet. Sambungkan lalu buka ulang.'; return; }
   if (!peta) {
@@ -78,8 +78,12 @@ function mulai(){
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(peta);
     lapisan = L.layerGroup().addTo(peta);
   }
-  $('info').textContent = 'Memuat...';
-  panggil({aksi: 'ambil'}).then(hasil).catch(gagal);
+  if (TOKEN) {
+    $('info').textContent = 'Memuat...';
+    panggil({aksi: 'ambil', token: TOKEN}).then(hasil).catch(gagal);
+  } else {
+    $('info').textContent = 'Ketik jenis usaha, lalu ketuk Cari.';
+  }
 }
 
 function ubah(){
@@ -93,27 +97,30 @@ function simpanPengaturan(){
     $('infoSetup').textContent = 'Link harus diawali https://script.google.com/macros/s/ dan berakhiran /exec';
     return;
   }
-  if (!k) { $('infoSetup').textContent = 'Isi kode akses dulu.'; return; }
   simpan('api', a); simpan('kode', k);
   mulai();
 }
 
 function hasil(r){
   $('btn').disabled = false;
-  if (r.error) { $('info').textContent = r.error; return; }
+  if (r.error) {
+    $('info').textContent = r.error + (r.error === 'Kode akses salah.' ? ' Ketuk Pemilik untuk memperbaiki.' : '');
+    return;
+  }
   tampil(r.leads || []);
 }
 
 function gagal(e){
   $('btn').disabled = false;
-  $('info').textContent = 'Gagal terhubung. Cek internet, link /exec, dan akses penerapan "Siapa saja".';
+  $('info').textContent = 'Gagal terhubung. Cek internet lalu coba lagi.';
 }
 
 function cari(){
   var u = $('usaha').value, l = $('lokasi').value;
   $('btn').disabled = true;
   $('info').textContent = 'Mencari, mohon tunggu...';
-  panggil({aksi: 'cari', usaha: u, lokasi: l}).then(hasil).catch(gagal);
+  var p = TOKEN ? {aksi: 'cari', usaha: u, lokasi: l, token: TOKEN} : {aksi: 'umum', usaha: u, lokasi: l, cid: CID};
+  panggil(p).then(hasil).catch(gagal);
 }
 
 function tampil(leads){
@@ -140,7 +147,7 @@ function tampil(leads){
   });
   if (titik.length) peta.fitBounds(titik, {padding: [20, 20]});
   setTimeout(function(){ peta.invalidateSize(); }, 300);
-  $('info').textContent = leads.length + ' lead';
+  $('info').textContent = leads.length ? leads.length + ' lead' : 'Tidak ada hasil. Coba kata kunci atau lokasi lain.';
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
