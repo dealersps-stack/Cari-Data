@@ -56,6 +56,32 @@ function $(x){ return document.getElementById(x); }
 function baca(k){ try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
 function simpan(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
 
+var PROMO_BERJALAN = '';
+
+function linkWa(hp, teks){
+  return 'https://wa.me/' + String(hp).replace(/\D/g, '') + '?text=' + encodeURIComponent(teks);
+}
+
+function pesanSingkat(nama){
+  return 'Halo ' + nama + ', Salam Satu Hati. Perkenalkan saya Hendi dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini. Jika Ibu/Bapak berkenan, mohon konfirmasinya. Terima kasih.';
+}
+
+function pesanLengkap(nama){
+  var t = 'Halo ' + nama + ', Salam Satu Hati.\n' +
+    'Perkenalkan saya Hendi dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini.\n\n';
+  if (PROMO_BERJALAN) t += '\uD83D\uDD25 *Promo berjalan:* ' + PROMO_BERJALAN + '\n\n';
+  t += '*Keuntungan membeli di kami:*\n' +
+    '\u2705 Honda Care: layanan antar jemput (min. 2 km)\n' +
+    '\u2705 Sparepart lengkap\n' +
+    '\u2705 Apparel\n' +
+    '\u2705 Cuci poles\n' +
+    '\u2705 Tukar tambah dengan harga tinggi\n' +
+    '\u2705 Asuransi diri selama 2 tahun\n' +
+    '\u2705 Voucher coaching Rp300.000\n\n' +
+    'Jika Ibu/Bapak berkenan, mohon konfirmasinya. Jika kurang berkenan, mohon maaf sudah mengganggu. Terima kasih \uD83D\uDE4F';
+  return t;
+}
+
 function esc(s){
   return String(s || '').replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -138,7 +164,8 @@ function tampil(leads){
     k.className = 'kartu';
     k.innerHTML = '<b>' + esc(x.nama) + '</b><br><small>' + esc(x.kategori) + ' • ' + esc(x.alamat) + '</small>' +
       '<div class="aksi">' +
-      '<a class="wa" href="' + aman(x.wa) + '" target="_blank" rel="noopener">WA</a>' +
+      '<a class="wa" href="' + linkWa(x.hp, pesanSingkat(x.nama)) + '" target="_blank" rel="noopener">WA</a>' +
+      '<a class="wa" href="' + linkWa(x.hp, pesanLengkap(x.nama)) + '" target="_blank" rel="noopener">WA + Promo</a>' +
       '<a class="tel" href="tel:+' + esc(x.hp) + '">Telepon</a>' +
       '<a class="mp" href="' + aman(x.maps) + '" target="_blank" rel="noopener">Maps</a>' +
       '<a class="rt" href="' + aman(x.rute) + '" target="_blank" rel="noopener">Rute</a>' +
