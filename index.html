@@ -44,8 +44,11 @@
     <small id="info"></small>
     <input id="nama" placeholder="Nama Anda (dipakai di pesan WA)" onchange="simpanNama()">
     <input id="linkMateri" placeholder="Link materi promo (opsional)" onchange="simpanLink()">
-    <button type="button" style="background:#555" onclick="window.open('https://drive.google.com/drive/my-drive','_blank')">Buka Google Drive untuk upload materi</button>
-    <small id="infoMateri">Upload materi ke Google Drive Anda, ketuk Bagikan, pilih "Siapa saja yang memiliki link", salin link, lalu tempel di kolom di atas.</small>
+    <input id="gambarInput" type="file" accept="image/*" hidden onchange="pilihGambar(this)">
+    <button type="button" style="background:#555" onclick="$('gambarInput').click()">Pilih gambar materi dari galeri</button>
+    <img id="thumb" hidden alt="Gambar materi" style="max-width:110px;max-height:110px;border-radius:8px;margin-top:6px;display:block">
+    <a id="hapusGambar" href="#" hidden onclick="hapusGambar();return false" style="font-size:13px">Hapus gambar</a>
+    <small id="infoMateri">Materi boleh berupa link (Google Drive, Google Foto, Canva, dll. dengan akses "siapa saja yang memiliki link") atau gambar dari galeri HP.</small>
   </div>
   <div id="peta"></div>
   <div id="daftar"></div>
@@ -89,9 +92,11 @@ function pesanLengkap(nama){
   return t;
 }
 
-function namaAnda(){ return baca('nama') || (TOKEN ? 'Hendi' : ''); }
+var daftarTerakhir = [], gambarFile = null;
+function namaAnda(){ return baca('nama'); }
+function ulangTampil(){ if (daftarTerakhir.length && lapisan) tampil(daftarTerakhir); }
 function sebutNama(){ var n = namaAnda(); return n ? n + ' ' : ''; }
-function simpanNama(){ simpan('nama', $('nama').value.trim()); }
+function simpanNama(){ simpan('nama', $('nama').value.trim().slice(0, 40)); ulangTampil(); }
 
 function simpanLink(){
   var v = $('linkMateri').value.trim();
@@ -102,7 +107,75 @@ function simpanLink(){
   MATERI_URL = v;
   simpan('materi', v);
   $('infoMateri').textContent = v ? 'Link materi tersimpan. Akan ikut di pesan WA + Promo.' : 'Link materi dikosongkan.';
+  ulangTampil();
 }
+
+function kecilkan(file){
+  return new Promise(function(ok, tolak){
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function(){
+      var s = Math.min(1, 1280 / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.round(img.width * s);
+      c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); tolak(new Error('gambar')); };
+    img.src = url;
+  });
+}
+
+function tampilGambar(){
+  var d = baca('gambar');
+  $('thumb').src = d || '';
+  $('thumb').hidden = !d;
+  $('hapusGambar').hidden = !d;
+}
+
+function muatGambar(){
+  var d = baca('gambar');
+  tampilGambar();
+  if (!d || !window.fetch) { gambarFile = null; return; }
+  fetch(d).then(function(r){ return r.blob(); }).then(function(b){
+    gambarFile = new File([b], 'materi-promo.jpg', {type: 'image/jpeg'});
+    ulangTampil();
+  }).catch(function(){ gambarFile = null; });
+}
+
+function pilihGambar(el){
+  var f = el.files && el.files[0];
+  el.value = '';
+  if (!f) return;
+  $('infoMateri').textContent = 'Menyiapkan gambar...';
+  kecilkan(f).then(function(d){
+    simpan('gambar', d);
+    if (baca('gambar') !== d) { $('infoMateri').textContent = 'Penyimpanan HP penuh. Coba gambar lain atau pakai link.'; return; }
+    $('infoMateri').textContent = 'Gambar tersimpan di HP ini. Tombol Kirim Gambar muncul di tiap lead.';
+    muatGambar();
+  }).catch(function(){
+    $('infoMateri').textContent = 'Gambar tidak bisa dibaca. Coba gambar lain.';
+  });
+}
+
+function hapusGambar(){
+  try { localStorage.removeItem('gambar'); } catch (e) {}
+  gambarFile = null;
+  tampilGambar();
+  $('infoMateri').textContent = 'Gambar dihapus.';
+  ulangTampil();
+}
+
+function kirimGambar(){
+  if (!gambarFile) return;
+  if (navigator.canShare && navigator.canShare({files: [gambarFile]})) {
+    navigator.share({files: [gambarFile]}).catch(function(){});
+  } else {
+    alert('HP ini belum mendukung kirim gambar dari aplikasi. Pakai link materi.');
+  }
+}
+
 
 function esc(s){
   return String(s || '').replace(/[&<>"']/g, function(c){
@@ -121,8 +194,13 @@ function mulai(){
   if (!CID) { CID = Math.random().toString(36).slice(2) + Date.now().toString(36); simpan('cid', CID); }
   $('setup').hidden = true; $('app').hidden = false;
   MATERI_URL = baca('materi');
+  if (!baca('nama')) {
+    var n = prompt('Siapa nama Anda? (dipakai di pesan WA)');
+    if (n && n.trim()) simpan('nama', n.trim().slice(0, 40));
+  }
   $('nama').value = namaAnda();
   $('linkMateri').value = MATERI_URL;
+  muatGambar();
   if (typeof L === 'undefined') { $('info').textContent = 'Peta butuh internet. Sambungkan lalu buka ulang.'; return; }
   if (!peta) {
     peta = L.map('peta').setView([-7.78, 110.37], 10);
@@ -175,6 +253,7 @@ function cari(){
 }
 
 function tampil(leads){
+  daftarTerakhir = leads;
   lapisan.clearLayers();
   var d = $('daftar');
   d.innerHTML = '';
@@ -191,6 +270,7 @@ function tampil(leads){
       '<div class="aksi">' +
       '<a class="wa" href="' + linkWa(x.hp, pesanSingkat(x.nama)) + '" target="_blank" rel="noopener">WA</a>' +
       '<a class="wa" href="' + linkWa(x.hp, pesanLengkap(x.nama)) + '" target="_blank" rel="noopener">WA + Promo</a>' +
+      ((gambarFile && navigator.canShare && navigator.canShare({files: [gambarFile]})) ? '<a class="wa" href="#" onclick="kirimGambar();return false">Kirim Gambar</a>' : '') +
       '<a class="tel" href="tel:+' + esc(x.hp) + '">Telepon</a>' +
       '<a class="mp" href="' + aman(x.maps) + '" target="_blank" rel="noopener">Maps</a>' +
       '<a class="rt" href="' + aman(x.rute) + '" target="_blank" rel="noopener">Rute</a>' +
