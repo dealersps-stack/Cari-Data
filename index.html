@@ -42,6 +42,10 @@
     <input id="lokasi" placeholder="Lokasi (kosong = seluruh DIY)">
     <button id="btn" onclick="cari()">Cari</button>
     <small id="info"></small>
+    <input id="nama" placeholder="Nama Anda (dipakai di pesan WA)" onchange="simpanNama()">
+    <input id="linkMateri" placeholder="Link materi promo (opsional)" onchange="simpanLink()">
+    <button type="button" style="background:#555" onclick="window.open('https://drive.google.com/drive/my-drive','_blank')">Buka Google Drive untuk upload materi</button>
+    <small id="infoMateri">Upload materi ke Google Drive Anda, ketuk Bagikan, pilih "Siapa saja yang memiliki link", salin link, lalu tempel di kolom di atas.</small>
   </div>
   <div id="peta"></div>
   <div id="daftar"></div>
@@ -57,18 +61,19 @@ function baca(k){ try { return localStorage.getItem(k) || ''; } catch (e) { retu
 function simpan(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
 
 var PROMO_BERJALAN = '';
+var MATERI_URL = '';
 
 function linkWa(hp, teks){
   return 'https://wa.me/' + String(hp).replace(/\D/g, '') + '?text=' + encodeURIComponent(teks);
 }
 
 function pesanSingkat(nama){
-  return 'Halo ' + nama + ', Salam Satu Hati. Perkenalkan saya Hendi dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini. Jika Ibu/Bapak berkenan, mohon konfirmasinya. Terima kasih.';
+  return 'Halo ' + nama + ', Salam Satu Hati. Perkenalkan saya ' + sebutNama() + 'dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini. Jika Ibu/Bapak berkenan, mohon konfirmasinya. Terima kasih.';
 }
 
 function pesanLengkap(nama){
   var t = 'Halo ' + nama + ', Salam Satu Hati.\n' +
-    'Perkenalkan saya Hendi dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini.\n\n';
+    'Perkenalkan saya ' + sebutNama() + 'dari dealer SPS Honda Motor Sleman. Mohon izin menawarkan promo bulan ini.\n\n';
   if (PROMO_BERJALAN) t += '\uD83D\uDD25 *Promo berjalan:* ' + PROMO_BERJALAN + '\n\n';
   t += '*Keuntungan membeli di kami:*\n' +
     '\u2705 Honda Care: layanan antar jemput (min. 2 km)\n' +
@@ -77,9 +82,26 @@ function pesanLengkap(nama){
     '\u2705 Cuci poles\n' +
     '\u2705 Tukar tambah dengan harga tinggi\n' +
     '\u2705 Asuransi diri selama 2 tahun\n' +
-    '\u2705 Voucher coaching Rp300.000\n\n' +
+    '\u2705 Voucher coaching Rp300.000\n' +
+    '\u2705 Voucher disc service 25%\n\n' +
+    (MATERI_URL ? '\uD83D\uDCCE *Materi promo:* ' + MATERI_URL + '\n\n' : '') +
     'Jika Ibu/Bapak berkenan, mohon konfirmasinya. Jika kurang berkenan, mohon maaf sudah mengganggu. Terima kasih \uD83D\uDE4F';
   return t;
+}
+
+function namaAnda(){ return baca('nama') || (TOKEN ? 'Hendi' : ''); }
+function sebutNama(){ var n = namaAnda(); return n ? n + ' ' : ''; }
+function simpanNama(){ simpan('nama', $('nama').value.trim()); }
+
+function simpanLink(){
+  var v = $('linkMateri').value.trim();
+  if (v && !/^https:\/\//i.test(v)) {
+    $('infoMateri').textContent = 'Link harus diawali https://';
+    return;
+  }
+  MATERI_URL = v;
+  simpan('materi', v);
+  $('infoMateri').textContent = v ? 'Link materi tersimpan. Akan ikut di pesan WA + Promo.' : 'Link materi dikosongkan.';
 }
 
 function esc(s){
@@ -98,6 +120,9 @@ function mulai(){
   API = baca('api') || API_BAWAAN; TOKEN = baca('kode'); CID = baca('cid');
   if (!CID) { CID = Math.random().toString(36).slice(2) + Date.now().toString(36); simpan('cid', CID); }
   $('setup').hidden = true; $('app').hidden = false;
+  MATERI_URL = baca('materi');
+  $('nama').value = namaAnda();
+  $('linkMateri').value = MATERI_URL;
   if (typeof L === 'undefined') { $('info').textContent = 'Peta butuh internet. Sambungkan lalu buka ulang.'; return; }
   if (!peta) {
     peta = L.map('peta').setView([-7.78, 110.37], 10);
